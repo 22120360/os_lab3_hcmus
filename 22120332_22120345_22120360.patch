@@ -1,0 +1,61 @@
+diff --git a/kernel/proc.c b/kernel/proc.c
+index 625bb07..130d9ce 100644
+--- a/kernel/proc.c
++++ b/kernel/proc.c
+@@ -132,13 +132,6 @@ found:
+     return 0;
+   }
+ 
+-   if ((p->usyscall = (struct usyscall *)kalloc()) == 0) {
+-    freeproc(p);
+-    release(&p->lock);
+-    return 0;
+-  }
+-  p->usyscall->pid = p->pid;
+-
+   // An empty user page table.
+   p->pagetable = proc_pagetable(p);
+   if(p->pagetable == 0){
+@@ -165,11 +158,6 @@ freeproc(struct proc *p)
+   if(p->trapframe)
+     kfree((void*)p->trapframe);
+   p->trapframe = 0;
+-
+-  if(p->usyscall)
+-    kfree((void *)p->usyscall);
+-  p->usyscall = 0;
+-
+   if(p->pagetable)
+     proc_freepagetable(p->pagetable, p->sz);
+   p->pagetable = 0;
+@@ -205,12 +193,6 @@ proc_pagetable(struct proc *p)
+     return 0;
+   }
+ 
+-  if(mappages(pagetable, USYSCALL, PGSIZE,
+-              (uint64)(p->usyscall), PTE_U | PTE_R) < 0){
+-    uvmfree(pagetable, 0);
+-    return 0;
+-  }
+-
+   // map the trapframe page just below the trampoline page, for
+   // trampoline.S.
+   if(mappages(pagetable, TRAPFRAME, PGSIZE,
+@@ -228,7 +210,6 @@ proc_pagetable(struct proc *p)
+ void
+ proc_freepagetable(pagetable_t pagetable, uint64 sz)
+ {
+-  uvmunmap(pagetable, USYSCALL, 1, 0);
+   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+   uvmfree(pagetable, sz);
+diff --git a/kernel/proc.h b/kernel/proc.h
+index 1668c14..d021857 100644
+--- a/kernel/proc.h
++++ b/kernel/proc.h
+@@ -104,5 +104,4 @@ struct proc {
+   struct file *ofile[NOFILE];  // Open files
+   struct inode *cwd;           // Current directory
+   char name[16];               // Process name (debugging)
+-  struct usyscall* usyscall; 
+ };
