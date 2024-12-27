@@ -123,3 +123,40 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+
+uint64
+sys_pgaccess(void)
+{
+    uint64 startva;
+    int npages;
+    uint64 user_mask_addr;
+    uint64 mask = 0;  // Lưu kết quả tạm thời trong kernel
+    pte_t *pte;
+
+    // Lấy các tham số từ người dùng
+    if (argaddr(0, &startva) < 0 || argint(1, &npages) < 0 || argaddr(2, &user_mask_addr) < 0)
+        return -1;
+
+    if (npages < 0 || npages > 32)  // Giới hạn số trang (tùy bạn)
+        return -1;
+
+    // Duyệt qua từng trang
+    for (int i = 0; i < npages; i++) {
+        uint64 va = startva + i * PGSIZE;
+        pte = walk(myproc()->pagetable, va, 0);
+
+        if (pte && (*pte & PTE_V)) {  // Kiểm tra PTE hợp lệ
+            if (*pte & PTE_A) {  // Kiểm tra bit truy cập
+                mask |= (1L << i);  // Đánh dấu trang này trong bitmask
+                *pte &= ~PTE_A;  // Xóa bit truy cập để theo dõi lần truy cập tiếp theo
+            }
+        }
+    }
+
+    // Sao chép kết quả từ kernel sang user
+    if (copyout(myproc()->pagetable, user_mask_addr, (char *)&mask, sizeof(mask)) < 0)
+        return -1;
+
+    return 0;
+}
